@@ -1,50 +1,61 @@
-## A股策略 Python 模板示例: DeskPro_v6.5.py
-
 # -*- coding: utf-8 -*-
 """
-A股 DeskPro 策略模板
-用于演示仓位管理、主线评分、回测框架
+A股 DESK PRO V15.7 可执行策略
+版本日期: 2026-05-22
+说明: 可直接在 OLLAMA 或本地 Python 环境运行。
 """
 
-# 导入库
 import pandas as pd
-import numpy as np
+import datetime
 
-# --- 配置参数 ---
-策略名称 = 'DeskPro_v6.5'
-初始资金 = 1000000  # 初始资金1百万
-最大仓位比例 = 0.3  # 单个股票最大占组合比例
-主线评分阈值 = 80
-试错评分下限 = 65
+# 数据加载
+themes = pd.read_csv('themes.csv')
+stock_pool = pd.read_csv('stock_pool_v15_7.csv')
 
-# --- 数据加载（示例） ---
-# 请替换为实际申万行业指数或股票池数据
-数据路径 = './data/A股数据.csv'
-data = pd.DataFrame()  # placeholder
+# 策略参数
+TOTAL_ASSET = 1000000  # 示例总资产，可替换
+STANDARD_UNIT = 0.025  # 单次买入占比
+MAX_UNIT = 0.08        # 普通单票累计上限
+CORE_UNIT = 0.10       # 核心龙头单票上限
+DEFENSIVE_MIN = 0.05   # 防守仓最低保留
 
-# --- 仓位管理函数 ---
-def 计算目标仓位(评分):
-    if 评分 >= 主线评分阈值:
-        return 最大仓位比例
-    elif 评分 >= 试错评分下限:
-        return 最大仓位比例 * 0.5
+# 市场状态机判定函数
+def get_market_state(df):
+    # 检查沪深300和中证1000均线
+    hs300_above_ma20 = df.loc['HS300', 'close'] > df.loc['HS300', 'MA20']
+    zz1000_above_ma20 = df.loc['ZZ1000', 'close'] > df.loc['ZZ1000', 'MA20']
+    zz1000_stronger = df.loc['ZZ1000', 'rsi'] > df.loc['HS300', 'rsi']
+
+    if hs300_above_ma20 and zz1000_above_ma20 and zz1000_stronger:
+        return 'strong_bull'
+    elif hs300_above_ma20 or zz1000_above_ma20:
+        return 'attack'
     else:
-        return 0
+        return 'defensive'
 
-# --- 回测框架 ---
-def 回测策略(data):
-    """示例回测框架"""
-    data['目标仓位'] = data['评分'].apply(计算目标仓位)
-    # 简单回测收益计算示例
-    data['每日资金变化'] = data['目标仓位'] * data['日涨跌幅'] * 初始资金
-    return data
+# 买点函数
+def check_buy_point(stock, theme_state):
+    if theme_state in ['主攻', '试错']:
+        return True
+    return False
 
-# --- 主执行函数 ---
-def main():
-    回测结果 = 回测策略(data)
-    print('回测完成，示例输出：')
-    print(回测结果.head())
+# 卖出函数
+def check_sell_point(stock_price, ma20, ma30, loss_pct, upper_limit):
+    if stock_price < ma30 or loss_pct >= 0.12 or stock_price > upper_limit:
+        return 'sell'
+    elif stock_price < ma20 or loss_pct >= 0.08:
+        return 'reduce'
+    return 'hold'
 
-
-if __name__ == '__main__':
-    main()
+# 执行示例
+for idx, row in stock_pool.iterrows():
+    theme = row['theme']
+    theme_row = themes[(themes['date'] == datetime.date.today().isoformat()) & (themes['theme'] == theme)]
+    theme_state = theme_row['state'].values[0] if not theme_row.empty else '观察'
+    
+    if check_buy_point(row, theme_state):
+        print(f"{row['stock_code']} 满足买点, 可买 {STANDARD_UNIT*TOTAL_ASSET:.2f} 元")
+    
+    sell_action = check_sell_point(row['close'], row['MA20'], row['MA30'], row['loss_pct'], CORE_UNIT*TOTAL_ASSET)
+    if sell_action != 'hold':
+        print(f"{row['stock_code']} 执行 {sell_action}")
