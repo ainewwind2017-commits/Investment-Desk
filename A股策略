@@ -1,0 +1,50 @@
+## A股策略 Python 模板示例: DeskPro_v6.5.py
+
+# -*- coding: utf-8 -*-
+"""
+A股 DeskPro 策略模板
+用于演示仓位管理、主线评分、回测框架
+"""
+
+# 导入库
+import pandas as pd
+import numpy as np
+
+# --- 配置参数 ---
+策略名称 = 'DeskPro_v6.5'
+初始资金 = 1000000  # 初始资金1百万
+最大仓位比例 = 0.3  # 单个股票最大占组合比例
+主线评分阈值 = 80
+试错评分下限 = 65
+
+# --- 数据加载（示例） ---
+# 请替换为实际申万行业指数或股票池数据
+数据路径 = './data/A股数据.csv'
+data = pd.DataFrame()  # placeholder
+
+# --- 仓位管理函数 ---
+def 计算目标仓位(评分):
+    if 评分 >= 主线评分阈值:
+        return 最大仓位比例
+    elif 评分 >= 试错评分下限:
+        return 最大仓位比例 * 0.5
+    else:
+        return 0
+
+# --- 回测框架 ---
+def 回测策略(data):
+    """示例回测框架"""
+    data['目标仓位'] = data['评分'].apply(计算目标仓位)
+    # 简单回测收益计算示例
+    data['每日资金变化'] = data['目标仓位'] * data['日涨跌幅'] * 初始资金
+    return data
+
+# --- 主执行函数 ---
+def main():
+    回测结果 = 回测策略(data)
+    print('回测完成，示例输出：')
+    print(回测结果.head())
+
+
+if __name__ == '__main__':
+    main()
